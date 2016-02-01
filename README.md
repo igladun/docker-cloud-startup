@@ -34,6 +34,10 @@ Has been tested on: Ubuntu 14.04, RHEL 7, CentOS 7 and Fedora 23.
 
 Look at any [open issues](https://github.com/vidsy/tutum-startup/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+label%3ATo-Do) labeled as `to-do`.
 
+### Use Cases
+
+- ["Cost efficient CI infrastructure with AWS, Docker and Tutum"](https://blog.fabfuel.de/2016/01/27/cost-efficient-ci-infrastructure-with-aws-docker-and-tutum/) by @fabian
+
 ### Notes
 
 - Help improve this repo!
