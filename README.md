@@ -4,6 +4,8 @@
 
 ### What
 
+> This script was developed before **Docker Cloud** launched. It works on both platforms.
+
 This script is run at startup on new EC2 instances ([`user-data`](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html)) to register the instance as a [Tutum](https://tutum.co) node. Making use of the [Bring Your Own Node](https://support.tutum.co/support/solutions/articles/5000513678-bring-your-own-node) feature.
 
 ### Why
