@@ -1,42 +1,145 @@
 #!/bin/bash
 
-# Parameters
-# -- Tutum Credentials: store your username and API Key in an S3 bucket that the
-# EC2 Instance's IAM Role has permission to access
-# Username: <CREDENTIALS_S3_BUCKET>/<ENVIRONMENT>/tutum_auth_user
-# API Key: <CREDENTIALS_S3_BUCKET>/<ENVIRONMENT>/tutum_auth_api_key
-CREDENTIALS_S3_BUCKET="xxx"
-ENVIRONMENT="xxx" #e.g. "staging", "production"
-# -- Deployment Timeout: The amount of time to wait for this node to be deployed
-# before the attempt is abandoned
-DEPLOYMENT_TIMEOUT="5m"
+# --
+# Usage:
+#
+# ./script.sh <docker_cloud_user> <docker_cloud_api_key> <deployment_wait_period>
+# --
 
-METADATA_SERVICE_URL="http://169.254.169.254/latest/meta-data"
+# --
+# Stop script if any command fails and run _cleanup() function
+# --
 
-# Find OS kind: yum (Fedora based) or apt (Debian based)?
+set -e
+trap _cleanup ERR
 
-OS_KIND="unknown"
-if   which apt-get; then OS_KIND="debian"
-elif which yum;     then OS_KIND="fedora"
+# --
+# Functions
+# --
+
+function _cleanup {
+  printf "[docker-cloud-startup] ERROR - STOPPING EARLY.\n"
+}
+
+function _error {
+  printf "[docker-cloud-startup]   -> Error: $1.\n"
+}
+
+function _finished {
+  printf "[docker-cloud-startup] SCRIPT COMPLETE.\n"
+}
+
+function _ok {
+  printf "[docker-cloud-startup]   -> ok.\n"
+}
+
+function _output {
+  printf "[docker-cloud-startup] $1\n"
+}
+
+function _result {
+  printf "[docker-cloud-startup]   -> $1\n"
+}
+
+# --
+# START
+# --
+
+# --
+# Validate number of arguments
+# --
+
+_output "Checking arguments..."
+
+if [ "$#" -ne 3 ]; then
+  _error "illegal number of parameters"
+  exit 1
+else
+  _ok
 fi
 
-#Install dependencies
+# --
+# Set Docker Cloud env vars
+# --
+
+_output "Setting Docker Cloud environment variables..."
+
+export DOCKERCLOUD_USER=$1
+_result "DOCKERCLOUD_USER: \"$DOCKERCLOUD_USER\""
+export DOCKERCLOUD_APIKEY=$2
+_result "DOCKERCLOUD_APIKEY: \"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\""
+
+_ok
+
+# --
+# INPUT variables
+# --
+
+_output "Setting input variables..."
+
+DEPLOYMENT_TIMEOUT=$3
+_result "DEPLOYMENT_TIMEOUT: \"$DEPLOYMENT_TIMEOUT\""
+
+_ok
+
+# --
+# FINAL variables
+# --
+
+_output "Setting final variables..."
+
+METADATA_SERVICE_URI="http://169.254.169.254/latest/meta-data"
+_result "METADATA_SERVICE_URI: \"$METADATA_SERVICE_URI\""
+
+DOCKER_CLOUD_CLI_VERSION="1.0.1"
+_result "DOCKER_CLOUD_CLI_VERSION: \"$DOCKER_CLOUD_CLI_VERSION\""
+
+AWS_CLI_VERSION="1.9.20"
+_result "AWS_CLI_VERSION: \"$AWS_CLI_VERSION\""
+
+_ok
+
+# --
+# Find OS kind
+# --
+
+_output "Finding OS..."
+
+OS_KIND="unknown"
+if which apt-get > /dev/null; then
+  OS_KIND="debian"
+elif which yum > /dev/null; then
+  OS_KIND="fedora"
+fi
+_result "OS: \"$OS_KIND\""
+
+_ok
+
+# --
+# Install dependencies
+# --
+
+_output "Installing dependencies..."
 
 case "$OS_KIND" in
   debian)
     locale-gen en_GB.UTF-8
     apt-get update
-    apt-get install -y python-pip jq
+    apt-get install -y python-pip jq curl
     ;;
   fedora)
     echo "en_GB.UTF-8" > /etc/locale.conf
-    yum install -y python #Fedora doesn't have Python pre-installed
-    #pip & jq aren't in the yum repos
+
+    # Fedora doesn't have Python pre-installed
+    yum install -y python curl
+
+    # pip & jq aren't in the yum repos
     curl -O https://bootstrap.pypa.io/get-pip.py
     python get-pip.py
     curl -Lo /usr/bin/jq https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64
     chmod ugo+x /usr/bin/jq
-    #We also need to configure sudo for the Tutum install to work
+
+    # We also need to configure sudo for the agent install to work
     echo "Defaults:root !requiretty" >> /etc/sudoers.d/91-cloud-sudoers-requiretty
     chmod 440 /etc/sudoers.d/91-cloud-sudoers-requiretty
     ;;
@@ -46,49 +149,88 @@ case "$OS_KIND" in
     ;;
 esac
 
-pip install tutum==0.21.1 awscli==1.9.20
+_ok
 
+# --
+# Install CLI apps
+# --
+
+_output "Installing CLI apps..."
+
+pip install -q docker-cloud==$DOCKER_CLOUD_CLI_VERSION awscli==$AWS_CLI_VERSION
+
+_ok
+
+# --
 # Set AWS env vars
+# --
 
-export AWS_DEFAULT_REGION=$(curl -fs ${METADATA_SERVICE_URL}/placement/availability-zone | sed 's/.$//')
+_output "Setting AWS environment variables..."
 
-# Set Tutum env vars
+export AWS_DEFAULT_REGION=$(curl -f ${METADATA_SERVICE_URI}/placement/availability-zone | sed 's/.$//')
+_result "AWS_DEFAULT_REGION: \"$AWS_DEFAULT_REGION\""
 
-export TUTUM_USER=$(aws s3 cp s3://${CREDENTIALS_S3_BUCKET}/${ENVIRONMENT}/tutum_auth_user - --region ${AWS_DEFAULT_REGION})
-export TUTUM_APIKEY=$(aws s3 cp s3://${CREDENTIALS_S3_BUCKET}/${ENVIRONMENT}/tutum_auth_api_key - --region ${AWS_DEFAULT_REGION})
+_ok
 
-# Register this node with Tutum
+# --
+# Register node
+# --
 
-tutum node byo | sed -n 4p | source /dev/stdin
+_output "Registering node..."
 
-# Remove any old Tutum nodes
+BYO_COMMAND=$(docker-cloud node byo | sed -n 4p | sed -e 's/^[ \t]*//')
+_result "\"$BYO_COMMAND\""
+eval $BYO_COMMAND
 
-tutum node rm $(tutum node list | grep "Unreachable" | awk '{print $1}')
+_ok
 
-# Set Tutum UUID env var now that tutum-agent has been installed
+# --
+# Set node UUID env var now that agent has been installed
+# --
 
-export TUTUM_UUID=$(cat /etc/tutum/agent/tutum-agent.conf | jq -r .TutumUUID)
+_output "Setting Docker Cloud node UUID..."
 
+export NODE_UUID=$(cat /etc/dockercloud/agent/dockercloud-agent.conf | jq -r .UUID)
+_result "NODE_UUID: \"$NODE_UUID\""
+
+_ok
+
+# --
 # Wait for node to be deployed
+# --
 
-echo "Waiting for node to be deployed..."
-timeout $DEPLOYMENT_TIMEOUT bash -c "while [ \"\$(tutum node inspect $TUTUM_UUID | jq -r .state)\" != \"Deployed\" ]; do sleep 10; done;" #TUTUM_UUID is purposefully not escaped
-if [ $? != 0 ]; then echo "Node never came up"; exit 2; fi
+_output "Wait for node to be deployed..."
 
-# Set Tutum tags based on EC2 tags
+timeout $DEPLOYMENT_TIMEOUT bash -c "while [ \"\$(docker-cloud node inspect $NODE_UUID | jq -r .state)\" != \"Deployed\" ]; do sleep 5; done;"
+if [ $? != 0 ]; then _error "node never came up"; exit 2; fi
 
-INSTANCE_ID=$(curl -fs ${METADATA_SERVICE_URL}/instance-id)
-EC2_TAGS=$(aws ec2 describe-tags --filters "Name=resource-id,Values=$INSTANCE_ID" | jq -r '.Tags | map(select(.Key | contains("tutum"))) | .[].Value')
+_ok
 
+# --
+# Set node tags based on EC2 tags (tag must include "docker-cloud")
+# --
+
+_output "Add node tags..."
+
+INSTANCE_ID=$(curl -f ${METADATA_SERVICE_URI}/instance-id)
+_result "INSTANCE_ID: \"$INSTANCE_ID\""
+
+EC2_TAGS=$(aws ec2 describe-tags --filters "Name=resource-id,Values=$INSTANCE_ID" | jq -r '.Tags | map(select(.Key | contains("docker-cloud"))) | .[].Value')
 for TAG in $EC2_TAGS
 do
-  tutum tag add -t $TAG $TUTUM_UUID
+  _result "TAG: \"$TAG\""
+  docker-cloud tag add -t $TAG $NODE_UUID
 done
 
-# Cleanup instance
+_ok
 
-unset AWS_DEFAULT_REGION TUTUM_USER TUTUM_APIKEY TUTUM_UUID
-pip uninstall tutum awscli -y
+# --
+# Cleanup instance
+# --
+
+_output "Cleanup instance..."
+unset AWS_DEFAULT_REGION DOCKERCLOUD_USER DOCKERCLOUD_APIKEY NODE_UUID
+pip uninstall docker-cloud awscli -y
 case "$OS_KIND" in
   debian)
     apt-get purge -y python-pip jq
@@ -99,6 +241,14 @@ case "$OS_KIND" in
     ;;
 esac
 
+# --
 # Cleanup history
+# --
+
+_output "Cleanup history..."
 
 cat /dev/null > ~/.bash_history && history -c
+
+_ok
+
+_finished
