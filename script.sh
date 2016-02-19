@@ -3,7 +3,7 @@
 # --
 # Usage:
 #
-# ./script.sh <docker_cloud_user> <docker_cloud_api_key> <deployment_wait_period>
+# ./script.sh <docker_cloud_user> <docker_cloud_api_key> <deployment_wait_period> <stack_uuid>
 # --
 
 # --
@@ -51,7 +51,7 @@ function _result {
 
 _output "Checking arguments..."
 
-if [ "$#" -ne 3 ]; then
+if [ "$#" -ne 4 ]; then
   _error "illegal number of parameters"
   exit 1
 else
@@ -79,6 +79,8 @@ _output "Setting input variables..."
 
 DEPLOYMENT_TIMEOUT=$3
 _result "DEPLOYMENT_TIMEOUT: \"$DEPLOYMENT_TIMEOUT\""
+STACK_UUID=$4
+_result "STACK_UUID: \"$STACK_UUID\""
 
 _ok
 
@@ -221,6 +223,16 @@ do
   _result "TAG: \"$TAG\""
   docker-cloud tag add -t $TAG $NODE_UUID
 done
+
+_ok
+
+# --
+# Cleanup instance
+# --
+
+_output "Redeploy stack..."
+
+docker-cloud stack redeploy --sync $STACK_UUID
 
 _ok
 

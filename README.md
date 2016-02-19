@@ -23,7 +23,10 @@ API_KEY="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 # Timeout for node deployment (e.g. 30s, 2m, 10m)
 TIMEOUT="1m"
 
-curl -s $SCRIPT_URI | bash -s $USER $API_KEY $TIMEOUT
+# Stack UUID (needed for redeploy)
+STACK_UUID="xxx"
+
+curl -s $SCRIPT_URI | bash -s $USER $API_KEY $TIMEOUT $STACK_UUID
 ```
 
 ### What's it do?
@@ -34,6 +37,7 @@ curl -s $SCRIPT_URI | bash -s $USER $API_KEY $TIMEOUT
 - Waits for Docker Cloud node deployment to finish.
 - Retrieves EC2 instance tags.
 - Adds each tag as a Docker Cloud node tag.
+- Redeploys the stack.
 - Delete all installed packages and Bash history.
 
 ### Why
