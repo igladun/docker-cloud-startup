@@ -35,6 +35,7 @@ curl -s $SCRIPT_URI | bash -s $USER $API_KEY $TIMEOUT $STACK_UUID
 - Sets environment variables for Docker Cloud authentication.
 - Uses "Bring Your Own Node" CLI command to register new instance as Docker Cloud node.
 - Waits for Docker Cloud node deployment to finish.
+- Adds Docker Cloud UUID as a tag on the AWS instance.
 - Retrieves EC2 instance tags.
 - Adds each tag as a Docker Cloud node tag.
 - Redeploys the stack.
@@ -89,3 +90,4 @@ Look at any [open issues](https://github.com/vidsy/tutum-startup/issues?utf8=%E2
 
 - [@revett](https://github.com/revett)
 - [@jskeates](https://github.com/jskeates)
+- [@stevenjack](https://github.com/stevenjack)

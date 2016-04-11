@@ -209,10 +209,23 @@ if [ $? != 0 ]; then _error "node never came up"; exit 2; fi
 _ok
 
 # --
-# Set node tags based on EC2 tags (tag must include "docker-cloud")
+# Set node UUID as AWS tag
 # --
 
-_output "Add node tags..."
+_output "Add AWS tags..."
+
+INSTANCE_ID=$(curl -f ${METADATA_SERVICE_URI}/instance-id)
+_result "INSTANCE_ID: \"$INSTANCE_ID\""
+
+aws ec2 create-tags --resources $INSTANCE_ID --tags Key="Docker-Cloud-UUID",Value=$NODE_UUID
+
+_ok
+
+# --
+# Set node tags in docker cloud based on EC2 tags (tag must include "docker-cloud")
+# --
+
+_output "Add docker cloud node tags..."
 
 INSTANCE_ID=$(curl -f ${METADATA_SERVICE_URI}/instance-id)
 _result "INSTANCE_ID: \"$INSTANCE_ID\""
